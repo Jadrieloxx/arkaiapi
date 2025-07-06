@@ -1,20 +1,39 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST permitido' });
+  // --- INICIO DE LA SOLUCIÓN CORS ---
+  // Permitir solicitudes desde cualquier origen
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  // Métodos HTTP permitidos
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  // Cabeceras permitidas en la solicitud
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  const { prompt, isJsonMode } = req.body;
-  const API_KEY = process.env.GEMINI_API_KEY;
+  // Manejar la solicitud pre-vuelo (preflight) de OPTIONS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  // --- FIN DE LA SOLUCIÓN CORS ---
 
-  if (!API_KEY) return res.status(500).json({ error: 'Falta API Key' });
+  // El resto de tu lógica de la API
+  if (req.method === 'POST') {
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-  try {
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: isJsonMode ? 'gemini-1.5-pro-latest' : 'gemini-pro' });
-    const result = await model.generateContent(prompt);
-    const text = await result.response.text();
-    res.status(200).json({ result: text });
-  } catch (err) {
-    res.status(500).json({ error: 'Error al usar Gemini' });
+      const { prompt } = req.body;
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = await response.text();
+
+      return res.status(200).json({ result: text });
+
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: "Error al contactar la API de Gemini" });
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }
